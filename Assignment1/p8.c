@@ -12,30 +12,47 @@
 #include <sys/wait.h>
 #include <unistd.h>
 #include <fcntl.h> 
+#include <time.h>
 
 
-int SIZE = sizeof(float) * 2; //size of 2 floats
+int SIZE = 32 * 2; //size of 2 floats
 char *my_shm = "/myshm";
-char *msg = "hello IPC";
+
 char *addr;
 int fd;
 
-int main(){
 
-    int arr[] = {1,1,1,1,1,1,1,1,1};
-    int n = sizeof(arr)/sizeof(arr[0]);
-    int mid = n/2;
+int main(int argc, char *argv[]){
+
+
+
+    if(argv[1] == NULL){
+        printf("Please enter a size for the array\n");
+        exit(1);
+    }
+    int N; 
+    sscanf(argv[1], "%d", &N);
+    int mid = N/2;
+
+    float arr[N];
+    srand(time(0));
+
+    for (int i = 0; i < N; i++){
+        arr[i] = (float)rand() / RAND_MAX; 
+    }
+
+
 
     //create the shared memory
     fd = shm_open(my_shm, O_CREAT | O_RDWR, 0666); 
     if(fd == -1){
-        perror("failed at: shm_open");
+        printf("failed at: shm_open\n");
         exit(1);
     }
 
     //configure size of shared memory
     if(ftruncate(fd, SIZE) == -1){
-        perror("failed at: ftruncate");
+        printf("failed at: ftruncate\n");
         exit(1);
     }
 
@@ -43,14 +60,20 @@ int main(){
     //memory map to the shared memory
     addr = mmap(NULL, SIZE, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
     if(addr == MAP_FAILED){
-        perror("failed at: mmap");
+        printf("failed at: mmap\n");
         exit(1);
     }
 
-    
 
+    struct timespec start, end;
+    clock_gettime(CLOCK_MONOTONIC, &start);
 
     pid_t pid1 = fork(); //add check for fork()
+    if(pid1 == -1){
+        printf("Error forking first child");
+        exit(1);
+    }
+
     if(pid1 == 0){
         float p1 = 34.42;
         float sum1 = 0;
@@ -63,11 +86,15 @@ int main(){
         exit(0);
     }
 
-    pid_t pid2 = fork();
+    pid_t pid2 = fork();   
+    if(pid2 == -1){
+        printf("Error forking first child");
+        exit(1);
+    }
     if(pid2 == 0){
         float p2 = 78.96;
         float sum2 = 0;
-        for(int i = mid ; i < n ; i++){
+        for(int i = mid ; i < N ; i++){
             sum2 += arr[i];
         }
 
@@ -79,8 +106,6 @@ int main(){
 
     wait(NULL);
     wait(NULL);
-
-    printf("Size of array: %d\n", n);
 
     //result is saved as char. convert to float
     float sum1, sum2;
@@ -94,9 +119,12 @@ int main(){
     printf("The total sum is: %f\n", total);
 
 
-    
+    clock_gettime(CLOCK_MONOTONIC, &end);
 
-    
+    double t_elapsed = (end.tv_sec - start.tv_sec) + (end.tv_nsec - start.tv_nsec) / 1e9;
+
+    printf("Time taken: %.9f seconds\n", t_elapsed);
+
 
     munmap(addr, SIZE);
     shm_unlink(my_shm); // Remove shared memory object
