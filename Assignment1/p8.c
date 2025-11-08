@@ -15,7 +15,7 @@
 #include <time.h>
 
 
-int SIZE = 32 * 2; //size of 2 floats
+#define SIZE sizeof(float)*2
 char *my_shm = "/myshm";
 
 char *addr;
@@ -23,7 +23,6 @@ int fd;
 
 
 int main(int argc, char *argv[]){
-
 
 
     if(argv[1] == NULL){
@@ -56,7 +55,6 @@ int main(int argc, char *argv[]){
         exit(1);
     }
 
-
     //memory map to the shared memory
     addr = mmap(NULL, SIZE, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
     if(addr == MAP_FAILED){
@@ -64,25 +62,21 @@ int main(int argc, char *argv[]){
         exit(1);
     }
 
-
     struct timespec start, end;
     clock_gettime(CLOCK_MONOTONIC, &start);
 
-    pid_t pid1 = fork(); //add check for fork()
+    pid_t pid1 = fork(); 
     if(pid1 == -1){
         printf("Error forking first child");
         exit(1);
     }
 
     if(pid1 == 0){
-        float p1 = 34.42;
         float sum1 = 0;
-
         for(int i = 0; i < mid; i++){
             sum1 += arr[i];
         }
-
-        sprintf(addr, "%f", sum1); //write to shared memory
+        ((float *)addr)[0] = sum1;
         exit(0);
     }
 
@@ -91,26 +85,20 @@ int main(int argc, char *argv[]){
         printf("Error forking first child");
         exit(1);
     }
-    if(pid2 == 0){
-        float p2 = 78.96;
+    if(pid2 == 0){    
         float sum2 = 0;
         for(int i = mid ; i < N ; i++){
             sum2 += arr[i];
         }
-
-
-        sprintf(addr + 32, "%f", sum2); //write to shared memory
+        ((float *)addr)[1] = sum2;
         exit(0);
     }
 
-
     wait(NULL);
     wait(NULL);
-
-    //result is saved as char. convert to float
-    float sum1, sum2;
-    sscanf(addr, "%f", &sum1); 
-    sscanf(addr + 32, "%f", &sum2);
+    
+    float sum1 = ((float *)addr)[0];
+    float sum2 = ((float *)addr)[1];
 
     printf("reading 1: %f\n", sum1); 
     printf("reading 2: %f\n", sum2); 
@@ -118,13 +106,11 @@ int main(int argc, char *argv[]){
     float total = sum1 + sum2;
     printf("The total sum is: %f\n", total);
 
-
     clock_gettime(CLOCK_MONOTONIC, &end);
 
     double t_elapsed = (end.tv_sec - start.tv_sec) + (end.tv_nsec - start.tv_nsec) / 1e9;
 
     printf("Time taken: %.9f seconds\n", t_elapsed);
-
 
     munmap(addr, SIZE);
     shm_unlink(my_shm); // Remove shared memory object
